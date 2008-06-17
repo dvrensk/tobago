@@ -1,0 +1,66 @@
+#! /usr/bin/env ruby
+#
+# == Synopsis
+#
+# new_dbs: create new MySQL database(s) for a project
+#
+# == Usage
+#
+# new_dbs.rb [OPTION] ... PROJECT_NAME
+#
+# -h, --help:
+#    show help
+#
+# --charset, -c CHARSET:
+#    Charset to use.  Defaults to 'utf8'
+#
+# --environment, -e NAME:
+#    Set up databases for these environments.  Default is -e development -e test
+#
+# PROJECT_NAME: Database user, also used as prefix for database names.
+
+require 'getoptlong'
+require 'rdoc/usage'
+
+opts = GetoptLong.new(
+  [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+  [ '--charset', '-c', GetoptLong::REQUIRED_ARGUMENT ],
+  [ '--environment', '-e', GetoptLong::REQUIRED_ARGUMENT ]
+)
+
+charset = "utf8"
+environments = []
+opts.each do |opt, arg|
+  case opt
+  when '--help'
+    RDoc::usage
+  when '--charset'
+    charset = arg
+  when '--environment'
+    environments << arg
+  end
+end
+environments = %w(development test) if environments.empty?
+
+if ARGV.length != 1
+  puts "Missing db user name (try --help)"
+  exit 0
+end
+
+db_user = ARGV.shift
+
+print "Root password: "
+`stty -echo`
+root_pass = $stdin.gets.chomp
+puts ""
+`stty echo`
+
+stat = IO.popen("mysql -uroot -p#{root_pass}", 'w') do |my|
+  environments.each do |environment|
+    $stderr.puts "Creating #{db_user}_#{environment} with charset #{charset}."
+    # create database foo default character set utf8 default collate utf8_swedish_ci;
+    my.puts "create database #{db_user}_#{environment} default character set #{charset} default collate #{charset}_swedish_ci;"
+    # grant all on foo.* to foo@'localhost' identified by '';
+    my.puts "grant all on #{db_user}_#{environment}.* to #{db_user}@'localhost' identified by '';"
+  end
+end
